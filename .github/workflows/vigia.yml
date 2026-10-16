@@ -1,0 +1,28 @@
+# Vigia do koach-crm.fluxari.com: roda fora da VPS. Se falhar, o GitHub manda e-mail pro dono do repositório.
+name: vigia
+on:
+  schedule: [{ cron: '*/5 * * * *' }]   # o GitHub pode atrasar alguns minutos
+  workflow_dispatch:
+    inputs:
+      site: { description: 'URL a testar (pra simular queda)', default: 'https://koach-crm.fluxari.com' }
+jobs:
+  checar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      SITE: ${{ inputs.site || 'https://koach-crm.fluxari.com' }}
+    steps:
+      - name: Site, API e certificado
+        run: |
+          checa() {
+            curl -sf --max-time 15 "$SITE/api/health" | grep -q '"ok":true' || { echo "API/banco fora: $SITE/api/health"; return 1; }
+            js=$(curl -sf --max-time 15 "$SITE/" | grep -oE '/assets/[^"]+\.js' | head -1)
+            [ -n "$js" ] && curl -sf -o /dev/null --max-time 15 "$SITE$js" || { echo "Página fora ou sem JS: $SITE/"; return 1; }
+            host=${SITE#https://}; host=${host%%/*}
+            fim=$(echo | openssl s_client -servername "$host" -connect "$host:443" 2>/dev/null | openssl x509 -noout -enddate | cut -d= -f2)
+            dias=$(( ($(date -d "$fim" +%s) - $(date +%s)) / 86400 ))
+            [ "$dias" -ge 14 ] || { echo "Certificado vence em $dias dias"; return 1; }
+            echo "ok (certificado: $dias dias)"
+          }
+          # 2 falhas seguidas (1 min de intervalo) antes de avisar, pra não dar alarme falso
+          checa || { sleep 60; checa; }
