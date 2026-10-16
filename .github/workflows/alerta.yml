@@ -1,0 +1,14 @@
+# Disparado pelo teste de navegador na VPS quando uma tela do koach-crm quebra. Falha de propósito pro GitHub mandar e-mail.
+name: alerta
+on:
+  workflow_dispatch:
+    inputs:
+      motivo: { description: 'O que quebrou', required: true }
+jobs:
+  avisar:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo "::error::Teste de navegador do koach-crm falhou: $MOTIVO"
+          exit 1
+        env: { MOTIVO: '${{ inputs.motivo }}' }
